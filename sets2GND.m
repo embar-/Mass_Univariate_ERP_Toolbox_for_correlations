@@ -41,6 +41,9 @@
 %                      differ from the bin numbers in the set files.
 %                      {default: import all bins}
 %
+%   auto_bins        - [logical] Whether automatically generate bin information if
+%                      it does not exist in EEG.bindesc and in EEG.epoch.eventtype.
+%
 %   exclude_chans    - A cell array of channel labels to exclude from the
 %                      importation (e.g., {'A2','lle','rhe'}). You cannot
 %                      use both this option and 'include_chans' (below).{default:
@@ -132,6 +135,9 @@
 % 3/12/2013: If you provide a GND variable filename, program no longer
 % asks user if s/he wants to save the file. Thanks to Aaron Newman for the
 % suggestion.
+%
+% 2/2/2020 Add option 'auto_bins' to automatically add bin information
+% if it does not exist in EEG.bindesc and in EEG.epoch.eventtype
 
 %%%%%%%%%%%%%%%% Future Work  %%%%%%%%%%%%%%%%%
 %
@@ -148,17 +154,18 @@
 function GND=sets2GND(gui_infiles_or_tmplt,varargin)
 
 p=inputParser;
-p.addRequired('gui_infiles_or_tmplt',@(x) ischar(x) || iscell(x));
+p.addRequired('gui_infiles_or_tmplt',@(x) ischar(x) || iscell(x) || isstruct(x));
 p.addParamValue('sub_ids',[],@isnumeric);
 p.addParamValue('bsln',[],@(x) sum(isnan(x)) || (isnumeric(x) && length(x)==2));
 p.addParamValue('exp_name','An Experiment',@ischar);
 p.addParamValue('use_bins',[],@isnumeric);
+p.addParamValue('auto_bins',false,@(x) islogical(x) || ismember(x,[0 1]));
 p.addParamValue('exclude_chans',[],@(x) ischar(x) || iscell(x));
 p.addParamValue('include_chans',[],@(x) ischar(x) || iscell(x));
 p.addParamValue('out_fname',[],@ischar);
 p.addParamValue('verblevel',[],@(x) isnumeric(x) && (length(x)==1));
+p.addParamValue('corelate',[],@isnumeric);
 p.parse(gui_infiles_or_tmplt,varargin{:});
-
 
 global EEG
 global VERBLEVEL;
@@ -238,6 +245,9 @@ if strcmpi(gui_infiles_or_tmplt,'GUI'),
     end
 elseif iscell(p.Results.gui_infiles_or_tmplt)
     infiles=p.Results.gui_infiles_or_tmplt;
+elseif isstruct(p.Results.gui_infiles_or_tmplt)
+    ALLEEG=p.Results.gui_infiles_or_tmplt;
+    infiles=arrayfun(@(x) fullfile(ALLEEG(x).filepath,ALLEEG(x).filename), 1:length(ALLEEG),'UniformOutput',false);
 else
     if isempty(p.Results.sub_ids)
         error('If gui_infiles_or_tmplt is a string filename template, you must specify the subject numbers with the argument ''sub_ids''.');
@@ -279,14 +289,19 @@ else
     end
 end
 
-%Get rid of any redundant input files
-infiles=unique(infiles);
+if ~isstruct(p.Results.gui_infiles_or_tmplt)
+    %Get rid of any redundant input files
+    infiles=unique(infiles);
+end;
 n_infiles=length(infiles);
 
-
 %% Load first data set and draft GND fields
-EEG=pop_loadset(infiles{1});
-EEG_var_check(EEG,infiles{1});
+if ~isstruct(p.Results.gui_infiles_or_tmplt)
+    EEG=pop_loadset(infiles{1});
+    EEG_var_check(EEG,infiles{1});
+else
+    EEG=ALLEEG(1);
+end;
 
 [n_EEG_chans, n_pts, n_epochs]=size(EEG.data);
 if ~isempty(exclude_chans),
@@ -351,6 +366,15 @@ else
     use_chans=1:n_chans;
 end
 
+% Allow not defined EEG.bindesc
+if ~isfield(EEG,'bindesc') 
+    if p.Results.auto_bins
+        warning('EEG.bindesc not defined. Generating automatically.')
+        EEG=auto_bindesc(EEG);
+    else
+        error('EEG.bindesc not defined.')
+    end
+end
 n_EEG_bins=length(EEG.bindesc);
 if isempty(p.Results.use_bins),
     use_bins=1:n_EEG_bins;
@@ -378,10 +402,13 @@ GND.saved='no';
 GND.grands=zeros(n_chans,n_pts,n_bins)*NaN;
 GND.grands_stder=GND.grands;
 GND.grands_t=GND.grands;
+GND.grands_r=GND.grands;
 GND.sub_ct=zeros(1,n_bins);
 GND.chanlocs=EEG.chanlocs(use_chans);
 GND.bin_info=[];
-if isfield(EEG,'condesc'),
+GND.corelate=p.Results.corelate;
+
+if isfield(EEG,'condesc') && isfield(EEG,'binccodes')
     for b=1:n_bins,
         GND.bin_info(b).bindesc=EEG.bindesc{use_bins(b)};
         GND.bin_info(b).condcode=EEG.binccodes(use_bins(b));
@@ -394,8 +421,9 @@ else
     end
     
     %Note, Kutaslab data won't have condition descriptors
-    GND.condesc{1}='Experiment (not cal pulses)';
+    GND.condesc{1}='Experiment';
 end
+
 GND.time_pts=EEG.times;
 if isempty(p.Results.bsln)
     %use all time points before 0 or first time point
@@ -452,11 +480,17 @@ sub_ct=1;
 for filenum=1:n_infiles,
     new_sub=1; %Assume data from this subject has not been already loaded, until we learn otherwise (This is to deal with the fact that data from the same participant may be distributed among multiple set files)
     if filenum>1,
-        global EEG; %this needs to be done to be compatible with EEGLAB (which stores EEG globally)
+        %global EEG; %this needs to be done to be compatible with EEGLAB (which stores EEG globally)
         if VERBLEVEL,
-            fprintf('\n\n');
+            %fprintf('\n\n');
         end
-        EEG=pop_loadset(infiles{filenum});
+        
+        if isstruct(p.Results.gui_infiles_or_tmplt)
+            EEG=ALLEEG(filenum);
+        else
+            EEG=pop_loadset(infiles{filenum});
+        end
+        
         
         %collect sub names
         if isempty(EEG.subject),
@@ -486,6 +520,12 @@ for filenum=1:n_infiles,
             GND.indiv_subnames{sub}=sub_name;
         else
             sub=ur_sub_id;
+        end
+        
+        % Allow not defined EEG.bindesc
+        if ~isfield(EEG,'bindesc') && p.Results.auto_bins
+            warning('EEG.bindesc not defined. Generating automatically.')
+            EEG=auto_bindesc(EEG);
         end
         
         EEG_var_check(EEG,infiles{filenum});
@@ -589,7 +629,7 @@ for filenum=1:n_infiles,
         if isfield(EEG,'condesc'),
             newfile_condesc=EEG.condesc;
         else
-            newfile_condesc{1}='Experiment (not cal pulses)';
+            newfile_condesc{1}='Experiment';
         end
         if ~isequal(GND.condesc,newfile_condesc),
             error('The condition code descriptor (EEG.condesc) in file %s is not the same as that in previous files.\n', ...
@@ -603,14 +643,19 @@ for filenum=1:n_infiles,
                     b,infiles{1},infiles{filenum});
             end
         end
+        if ~isequal({GND.chanlocs.labels},{EEG.chanlocs(use_chans).labels}) % Labels are critical
+            error('File %s''s imported channel labels differs from that of file %s.\n', ...
+                infiles{1},infiles{filenum});
+        end
         try
-            [fs1, fs2, er]=comp_struct_quiet(GND.chanlocs,EEG.chanlocs(use_chans));
+            [~, ~, er]=comp_struct_quiet(GND.chanlocs,EEG.chanlocs(use_chans));
         catch
-            error('File %s''s imported channel location information differs from that of file %s.\n', ...
+            % structure information is not so critical
+            warning('File %s''s imported channel location information differs from that of file %s.\n', ...
                 infiles{1},infiles{filenum});
         end
         if ~isempty(er),
-            error('File %s''s imported channel location information differs from that of file %s.\n', ...
+            warning('File %s''s imported channel location information differs from that of file %s.\n', ...
                 infiles{1},infiles{filenum});
         end
     else
@@ -621,7 +666,10 @@ for filenum=1:n_infiles,
     fldnames=fieldnames(EEG);
     art_ics=[];
     ics_removed=0;
-    if sum(EEG.reject.gcompreject),
+    if ismember('reject', fldnames) ...
+            && isstruct(EEG.reject)...
+            && ismember('gcompreject', fieldnames(EEG.reject)) ...
+            && sum(EEG.reject.gcompreject),
         ics_removed=1;
     else
         for fn=1:length(fldnames),
@@ -638,7 +686,7 @@ for filenum=1:n_infiles,
     
     %baseline data (if not already baselined by ics_removed)
     if isnan(GND.bsln_wind)
-        fprintf('NOT baselining data.\n');
+        %fprintf('NOT baselining data.\n');
     elseif ~isempty(GND.bsln_wind) && ~ics_removed,
         bsln_pts(1)=find_tpt(GND.bsln_wind(1),EEG.times);
         bsln_pts(2)=find_tpt(GND.bsln_wind(2),EEG.times);
@@ -655,8 +703,12 @@ for filenum=1:n_infiles,
     
     %Compute ERPs, use GND.indiv_erps as a running sum
     for a=1:n_epochs,
-        for b=1:length(EEG.epoch(a).eventtype),
-            if (length(EEG.epoch(a).eventtype{b})>2) && strcmpi(EEG.epoch(a).eventtype{b}(1:3),'bin')
+        eventtypes=EEG.epoch(a).eventtype;
+        if ~iscell(eventtypes);
+            eventtypes={eventtypes};
+        end;
+        for b=1:length(eventtypes),
+            if (length(eventtypes{b})>2) && strcmpi(eventtypes{b}(1:3),'bin')
                 bin=str2num(EEG.epoch(a).eventtype{b}(4:end));
                 if ismember(bin,use_bins) && ~index_cellarray_or_vector(EEG.epoch(a).eventlatency,b,VERBLEVEL),
                     
@@ -748,8 +800,11 @@ end
 if VERBLEVEL>1,
     fprintf('\n\n'); %add a couple lines between between counts and baselining info
 end
-GND=baselineGND(GND,GND.bsln_wind);% This line actually computes the grand average ERPs. It doesn't just baseline them.
-
+if isnan(GND.bsln_wind)
+    GND=grandsGND(GND);
+else
+    GND=baselineGND(GND,GND.bsln_wind);% This line actually computes the grand average ERPs. It doesn't just baseline them.
+end
 
 %Compute grand average cal pulses (if individual subject cal pulses present)
 if cal_info_present,
@@ -881,5 +936,35 @@ for a=1:n_super,
     if ~found,
         dif_ct=dif_ct+1;
         dif_str{dif_ct}=superset{a};
+    end
+end
+
+function EEG=auto_bindesc(EEG)
+zero_time_id=find(EEG.times==0,1);
+latency_mod=mod([EEG.event.latency],EEG.pnts);
+event_id_at_zero_time=find(latency_mod == zero_time_id);
+if ischar(EEG.event(1).type)
+    event_types_at_zero_time={EEG.event(event_id_at_zero_time).type}; % EEG.event.type is string
+else
+    warning('EEG.event.type is numeric instead of string')
+    event_types_at_zero_time=[EEG.event(event_id_at_zero_time).type]; % EEG.event.type is numeric
+end
+uniq_events=unique(event_types_at_zero_time);
+for i=1:length(EEG.epoch)
+    if ismember(EEG.epoch(i).eventtype,uniq_events)
+        EEG.epoch(i).eventtype={'bin1'};
+    end
+end
+if iscellstr(uniq_events)
+    if length(uniq_events) == 1
+        EEG.bindesc=uniq_events;
+    else
+        EEG.bindesc={[uniq_events{1} sprintf(' %s',uniq_events{2:end})]};
+    end
+else
+    if length(uniq_events) == 1
+        EEG.bindesc={num2str(uniq_events)};
+    else
+        EEG.bindesc={[num2str(uniq_events(1)) sprintf(' %d',uniq_events(2:end))]};
     end
 end

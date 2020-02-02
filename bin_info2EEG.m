@@ -106,7 +106,7 @@ else
 end
 
 %Are data epoched or continuous?
-if length(size(EEG.data))==2
+if isempty(EEG.epoch)
     continuous=1;
 else
     continuous=0;
