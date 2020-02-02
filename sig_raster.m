@@ -855,7 +855,11 @@ if ismember(lower(use_color),{'rgb' 'grey'})
     if strcmpi(p.Results.units,'t')
         %ht=text(v(2)+rngX*.8,rngY*.005,'t');
         %ht=text(v(2),v(3),'t');
-        cb.Label.String='Student’s t';
+        if isfield(GND,'grands_r') && ~isempty(GND.grands_r)
+            cb.Label.String='Pearson’s t';
+        else
+            cb.Label.String='Student’s t';
+        end
         cb.Label.FontSize = 10;
 %         if isempty(find(get(cb,'Limits') > 0))
 %             set(cb,'direction','reverse');

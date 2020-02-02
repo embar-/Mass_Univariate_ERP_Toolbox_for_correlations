@@ -324,6 +324,8 @@
 % with cluster-based tests
 %
 % 04/09/2017 - Fixed to show GUI in MATLAB R2017a by M.Baranauskas
+% 04/22/2017 - added support to convert Pearson correlation t-values 
+% into Pearson correlation p-values by M.Baranauskas
 
 function gui_erp(cmnd_str,varargin)
 
@@ -643,6 +645,9 @@ if strcmp(cmnd_str,'initialize')
     n_psbl_tests=length(use_tests);
     
     %% attach data to figure
+    if isfield(p.Results.GNDorGRP,'sub_ct')
+        dat.sub_ct=p.Results.GNDorGRP.sub_ct;
+    end;
     dat.erp=p.Results.GNDorGRP.grands;
     dat.t_scores=p.Results.GNDorGRP.grands_t;
     dat.stder=p.Results.GNDorGRP.grands_stder;
@@ -1224,7 +1229,7 @@ if strcmp(cmnd_str,'initialize')
         'tag','timerange');
     
     %%%% WHICH STAT TO PLOT
-    stats={'t-score of ERPs','standard error of ERPs','global field power of ERPs'};
+    stats={'t-score of ERPs','standard error of ERPs','global field power of ERPs', 'Pearson r'};
     % Text
     objs_change_col(6)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
@@ -1814,6 +1819,10 @@ elseif (stat==3),
     end
     cbar_title='\muV';
     ylab='\muV (GFP)';
+elseif (stat==4),
+    dat.showingB=dat.showing_t ./ (dat.showing_t .^2 + dat.sub_ct(new_bin)) .^ 0.5;
+    cbar_title='Pearson r';
+    ylab='Pearson r';
 end
 if size(dat.showingB,1)==1,
     %only one channel being plot
