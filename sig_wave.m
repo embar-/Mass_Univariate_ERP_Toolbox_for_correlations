@@ -117,7 +117,7 @@ p.addRequired('GND_GRP_specGND_or_fname',@(x) isstruct(x) || ischar(x));
 p.addRequired('test_id',@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('x_ticks',[],@isnumeric);
 p.addParamValue('wave_ticks',[],@isnumeric);
-p.addParamValue('fig_id',[],@(x) isnumeric(x) && (length(x)==1));
+p.addParamValue('fig_id',[],@(x) (length(x)==1));
 p.addParamValue('use_color',1,@(x) isnumeric(x) || ischar(x));
 p.addParamValue('verblevel',[],@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('x_limits',[],@(x) isnumeric(x) && (length(x)==2));

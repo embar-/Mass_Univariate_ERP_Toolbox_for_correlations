@@ -2131,12 +2131,12 @@ if ~strcmpi(STYLE,'grid')                     % if not plot grid only
             end
         else % plot markers for normal chans and EMARKER2CHANS separately
             for i=mark1chans,
-                hp2 = plot3(y(i),x(i),ELECTRODE_HEIGHT,...
+                hp2 = plot3(y(i),x(i), ones(size(y(i)))*ELECTRODE_HEIGHT,...
                     EMARKER,'Color',ECOLOR,'markersize',EMARKERSIZE,'linewidth',EMARKERLINEWIDTH);
                 set(hp2,'tag',str2lowcase(strtok(labels(i,:)))); %get rid of extra spaces and convert to lowercase
             end
             for i=mark2chans,
-                hp2b = plot3(y(i),x(i),ELECTRODE_HEIGHT,...
+                hp2b = plot3(y(i),x(i),ones(size(y(i)))*ELECTRODE_HEIGHT,...
                     EMARKER2,'Color',EMARKER2COLOR,'markerfacecolor',EMARKER2COLOR,'linewidth',EMARKER2LINEWIDTH,'markersize',EMARKERSIZE2);
                 set(hp2b,'tag',str2lowcase(strtok(labels(i,:)))); %get rid of extra spaces and convert to lowercase
             end

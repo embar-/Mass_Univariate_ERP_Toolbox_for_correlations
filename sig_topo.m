@@ -85,7 +85,7 @@ p=inputParser;
 p.addRequired('GND_GRP_specGND_or_fname',@(x) ischar(x) || isstruct(x));
 p.addRequired('test_id',@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('units','t',@ischar);
-p.addParamValue('fig_id',[],@(x) isnumeric(x) && (length(x)==1));
+p.addParamValue('fig_id',[],@(x) (length(x)==1));
 p.addParamValue('title_on',1,@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('one_scale',[],@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('verblevel',[],@(x) isnumeric(x) && (length(x)==1));

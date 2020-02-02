@@ -40,7 +40,7 @@
 %  fig_id           - [integer] The index # of the MATLAB figure in which
 %                     the diagram will be produced.  Useful for overwriting
 %                     old figures. {default: lowest unused index}
-%  use_color        - ['n','rb','rgb'] If 'n', raster will be black, white,
+%  use_color        - ['n','rb','rgb' 'grey'] If 'n', raster will be black, white,
 %                     and grey.  If 'rb', raster will be red (significantly
 %                     positive), blue (significantly negative), and white
 %                     (nonsignificant). If 'rgb', raster will use a 
@@ -123,6 +123,9 @@
 % electrode
 %
 % 3/5/2012-'rgb' color option and 'units' option added
+%
+% 4/22/2017 - 'grey' color option and various fixes by M.Baranauskas
+
 
 %%%%%%%%%%%%%%%% FUTURE WORK %%%%%%%%%%%%%%%%%
 % -When you click on figure, box with time and electrode appear behind edges
@@ -132,16 +135,16 @@
 % windows are used?
 
 
-function img=sig_raster3(GND_GRP_specGND_or_fname,test_id,varargin)
+function img=sig_raster(GND_GRP_specGND_or_fname,test_id,varargin)
 
 p=inputParser;
 p.addRequired('GND_GRP_specGND_or_fname',@(x) isstruct(x) || ischar(x)); 
 p.addRequired('test_id',@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('x_ticks',[],@isnumeric);
-p.addParamValue('fig_id',[],@(x) isnumeric(x) && (length(x)==1));
-p.addParamValue('use_color','n',@(x) strcmpi(x,'n') || strcmpi(x,'rb') || strcmpi(x,'rgb'));
-p.addParamValue('units','t',@(x) strcmpi(x,'t') || strcmpi(x,'uV'));
-p.addParamValue('plot_vert_lines',1,@(x) isnumeric(x) || ischar(x));
+p.addParamValue('fig_id',[],@(x) (length(x)==1));
+p.addParamValue('use_color','n',@(x) strcmpi(x,'n') || strcmpi(x,'rb') || strcmpi(x,'rgb') || strcmpi(x,'grey'));
+p.addParamValue('units','t',@(x) strcmpi(x,'t') || strcmpi(x,'uV') );
+p.addParamValue('plot_vert_lines',0,@(x) isnumeric(x) || ischar(x));
 p.addParamValue('lr_sym',0,@(x) isnumeric(x) || ischar(x));
 p.addParamValue('verblevel',[],@(x) isnumeric(x) && (length(x)==1));
 
@@ -154,7 +157,6 @@ else
     VERBLEVEL=p.Results.verblevel;
 end
 
-%use_color=str2bool(p.Results.use_color);
 use_color=p.Results.use_color;
 plot_vert_lines=str2bool(p.Results.plot_vert_lines);
 lr_sym=str2bool(p.Results.lr_sym);
@@ -427,10 +429,15 @@ else
         tm_range=GND.time_pts(use_tpts(end))-GND.time_pts(use_tpts(1));
         omag=orderofmag(tm_range);
         tm_step=round(omag*GND.srate/1000);
-        xtick=1:tm_step:n_show_tpts;
+        xtick=[1:tm_step:n_show_tpts];
+        if abs(n_show_tpts-xtick(end))>tm_step*0.9
+            xtick=[xtick n_show_tpts];
+        end;
         xtick_lab=cell(1,length(xtick));
         for a=1:length(xtick),
-            xtick_lab{a}=num2str(GND.time_pts(show_tpts(xtick(a))));
+            xtick_lab1=GND.time_pts(show_tpts(xtick(a)));
+            xtick_lab1=round(xtick_lab1/10)*10;
+            xtick_lab{a}=num2str(xtick_lab1);
         end
     else
         tk_ct=0;
@@ -442,7 +449,9 @@ else
         xtick=unique(xtick); %get rid of any redundant ticks
         xtick_lab=cell(1,length(xtick));
         for a=1:length(xtick),
-            xtick_lab{a}=num2str(GND.time_pts(show_tpts(xtick(a))));
+            xtick_lab1=GND.time_pts(show_tpts(xtick(a)));
+            %xtick_lab1=round(xtick_lab1/10)*10;
+            xtick_lab{a}=num2str(xtick_lab1);
         end
     end
 end
@@ -457,14 +466,15 @@ end
 
 %Initialize variables
 n_blank=(n_right>0)+(n_left>0)+(n_midline>0)-1;
-if ~strcmpi(use_color,'n'),
-    img=-.25*ones(n_use_chans+n_blank,n_show_tpts);%makes skipped lines grey (non-sig rectangles are white)
-else
+% if ~strcmpi(use_color,'n'),
+%     img=-.25*ones(n_use_chans+n_blank,n_show_tpts);%makes skipped lines grey (non-sig rectangles are white)
+% else
     img=zeros(n_use_chans+n_blank,n_show_tpts); %makes skipped lines grey
-end
-if strcmpi(use_color,'rgb')
+% end
+if ismember(lower(use_color),{'rgb' 'grey'})
     mask=img;
 end
+alphadata=ones(n_use_chans+n_blank,n_show_tpts);
 chan_lab=cell(1,n_use_chans);
 dat.chan_lab=cell(1,n_use_chans+n_blank); %channel labels including empty cells for skipped lines
 %dat_chan_lab is needed to make sig_raster plot interactive
@@ -486,14 +496,14 @@ for a=left,
     ct=ct+1;
     elec_id=find(use_chans==a);
     if fdr_crct,
-        if strcmpi(use_color,'rgb')
+        if ismember(lower(use_color),{'rgb' 'grey'})
             mask(ct,used_tpt_ids)=(pval(elec_id,:)<=GND.t_tests(test_id).desired_alphaORq);
             img(ct,used_tpt_ids)=grands_t(elec_id,:);
         else
             img(ct,used_tpt_ids)=(pval(elec_id,:)<=GND.t_tests(test_id).desired_alphaORq).*sign(grands_t(elec_id,:));
         end
     else
-        if strcmpi(use_color,'rgb')
+        if ismember(lower(use_color),{'rgb' 'grey'})
             mask(ct,used_tpt_ids)=(pval(elec_id,:)<GND.t_tests(test_id).estimated_alpha);
             img(ct,used_tpt_ids)=grands_t(elec_id,:);
         else
@@ -509,19 +519,20 @@ if ~isempty(midline),
         %skip line to separate left and midline electrodes
         ct=ct+1;
         skipped=ct;
+        alphadata(ct,used_tpt_ids)=zeros(1,length(used_tpt_ids));
     end
     for a=midline,
         ct=ct+1;
         elec_id=find(use_chans==a);
         if fdr_crct,
-            if strcmpi(use_color,'rgb')
+            if ismember(lower(use_color),{'rgb' 'grey'})
                 mask(ct,used_tpt_ids)=(pval(elec_id,:)<=GND.t_tests(test_id).desired_alphaORq);
                 img(ct,used_tpt_ids)=grands_t(elec_id,:);
             else
                 img(ct,used_tpt_ids)=(pval(elec_id,:)<=GND.t_tests(test_id).desired_alphaORq).*sign(grands_t(elec_id,:));
             end
         else
-            if strcmpi(use_color,'rgb')
+            if ismember(lower(use_color),{'rgb' 'grey'})
                 mask(ct,used_tpt_ids)=(pval(elec_id,:)<GND.t_tests(test_id).estimated_alpha);
                 img(ct,used_tpt_ids)=grands_t(elec_id,:);
             else
@@ -538,19 +549,20 @@ if ~isempty(right),
         %skip line to separate right from left or midline el
         ct=ct+1;
         skipped=[skipped ct];
+        alphadata(ct,used_tpt_ids)=zeros(1,length(used_tpt_ids));
     end
     for a=right,
         ct=ct+1;
         elec_id=find(use_chans==a);
         if fdr_crct,
-            if strcmpi(use_color,'rgb')
+            if ismember(lower(use_color),{'rgb' 'grey'})
                 mask(ct,used_tpt_ids)=(pval(elec_id,:)<=GND.t_tests(test_id).desired_alphaORq);
                 img(ct,used_tpt_ids)=grands_t(elec_id,:);
             else
                 img(ct,used_tpt_ids)=(pval(elec_id,:)<=GND.t_tests(test_id).desired_alphaORq).*sign(grands_t(elec_id,:));
             end
         else
-            if strcmpi(use_color,'rgb')
+            if ismember(lower(use_color),{'rgb' 'grey'})
                 mask(ct,used_tpt_ids)=(pval(elec_id,:)<GND.t_tests(test_id).estimated_alpha);
                 img(ct,used_tpt_ids)=grands_t(elec_id,:);
             else
@@ -579,18 +591,111 @@ end
 
 if strcmpi(use_color,'rb'),
     %skipped rows/columns=grey, nonsig=white, +sig=red, -sig=blue
-    h_img=imagesc(img,[-1 1]);colormap([0 0 1; .5 .5 .5; 1 1 1; 1 0 0]);
+    h_img=imagesc(img,'AlphaData',alphadata,[-1 1]);
+    colormap([0 0 1; .5 .5 .5; 1 1 1; 1 0 0]);
+elseif ismember(lower(use_color),{'rgb' 'grey'})
+    %if strcmpi(use_color,'rgb')
+    %    greyc=0.7;
+    %elseif strcmpi(use_color,'grey')
+        greyc=0.97;
+    %end;
+    cdata=img.*mask;
+    mn=min(cdata(:));
+    mx=max(cdata(:));
+    %mn=-0.7;mx=0.7;
+    if mn == 0 && mx == 0
+        if strcmpi(use_color,'rgb')
+            cmap=colormap('jet');
+        elseif strcmpi(use_color,'grey')
+            cmap(1:64,1:3)=greyc;
+        end;
+        colormap(cmap);
+        abs_mx=max(max(abs(img)));
+        if abs_mx==0; abs_mx=1; end;
+        cscal=[-abs_mx abs_mx];
+    elseif mn <= 0 && mx <= 0
+        cscal=[mn 0];
+        cmap=[1:64; 1:64; 1:64]'/64;
+        mxv=max(cdata(find(cdata<0)));
+        cmapi=floor((mn-mxv)/mn*64);
+        if strcmpi(use_color,'rgb')
+            cmap=flip(colormap('hot'),2);
+        elseif strcmpi(use_color,'grey')
+            cmap(1:cmapi+1,1:3)=[0:cmapi; 0:cmapi; 0:cmapi]'/cmapi/4*3;
+        end
+        cmap(cmapi+2:64,1:3)=greyc;
+        colormap(cmap);
+    elseif mn >= 0 && mx >= 0
+        cscal=[0 mx];
+        mnv=min(cdata(find(cdata>0)));
+        cmapi=floor(mnv/mx*64);
+        if strcmpi(use_color,'rgb')
+            cmap=flip(colormap('hot'));
+        elseif strcmpi(use_color,'grey')
+            cmap(cmapi+1:64,1:3)=(1-[1:64-cmapi; 1:64-cmapi; 1:64-cmapi]'/(64-cmapi))/4*3;
+        end
+        cmap(1:cmapi,1:3)=greyc;
+        colormap(cmap);
+    else
+        abs_mx=max(max(abs(img)));
+        cscal=[-abs_mx abs_mx];
+        cscal=[-0.7 0.7];
+        if strcmpi(use_color,'rgb')
+            cmap=colormap('jet');
+            cmap(32,:)=[1 1 1]*.7; %set 0 vals to grey
+            cmap(33,:)=[1 1 1]*.7; %set 0 vals to grey
+        elseif strcmpi(use_color,'grey')
+            cmap=colormap('grey');
+        end;
+        colormap(cmap);
+    end;
+    h_img=imagesc(img.*mask,'AlphaData',alphadata,cscal);
 elseif strcmpi(use_color,'rgb')
     cmap=colormap('jet');
-    %cmap(32,:)=[1 1 1]*.7; %set 0 vals to grey
-    zero_color=cmap(33,:);
+    cmap(32,:)=[1 1 1]*.7; %set 0 vals to grey
+    %zero_color=cmap(33,:);
     cmap(33,:)=[1 1 1]*.7; %set 0 vals to grey
     colormap(cmap);
     abs_mx=max(max(abs(img)));
-    h_img=imagesc(img.*mask,[-1 1]*abs_mx);
+    if abs_mx==0; abs_mx=1; end;
+    h_img=imagesc(img.*mask,'AlphaData',alphadata,[-1 1]*abs_mx);
+elseif strcmpi(use_color,'grey')
+    cdata=img.*mask;
+    mn=min(cdata(:));
+    mx=max(cdata(:));
+    if mn == 0 && mx == 0
+        cmap(1:64,1:3)=0.97;
+        colormap(cmap);
+        abs_mx=max(max(abs(img)));
+        if abs_mx==0; abs_mx=1; end;
+        cscal=[-abs_mx abs_mx];
+    elseif mn <= 0 && mx <= 0
+        cscal=[mn 0];
+        cmap=[1:64; 1:64; 1:64]'/64;
+        mxv=max(cdata(find(cdata<0)));
+        cmapi=floor((mn-mxv)/mn*64);
+        cmap(1:64,1:3)=0.97;
+        cmap(1:cmapi+1,1:3)=[0:cmapi; 0:cmapi; 0:cmapi]'/cmapi/4*3;
+        colormap(cmap);
+    elseif mn >= 0 && mx >= 0
+        cscal=[0 mx];
+        mnv=min(cdata(find(cdata>0)));
+        cmapi=floor(mnv/mx*64);
+        cmap(1:cmapi,1:3)=0.97;
+        cmap=[cmap; (1-[1:64-cmapi; 1:64-cmapi; 1:64-cmapi]'/(64-cmapi))/4*3];
+        colormap(cmap);
 else
-    h_img=imagesc(img,[-1 1]);colormap([0 0 0; .6 .6 .6; 1 1 1]);
+        abs_mx=max(max(abs(img)));
+        cscal=[-abs_mx abs_mx];
+        cmap=colormap('grey');
+        colormap(cmap);
+    end;
+    h_img=imagesc(img.*mask,'AlphaData',alphadata,cscal);
+else
+    h_img=imagesc(img,'AlphaData',alphadata,[-1 1]);
+    colormap([0 0 0; .6 .6 .6; 1 1 1]);
 end
+set(get(h_img,'Parent'),'Layer','top','Ydir','reverse','color','none')
 if freq_domain,
     bdfcn=['Cp = get(gca,''CurrentPoint''); ' ...
         'Xp=Cp(2,1);', ...
@@ -612,37 +717,39 @@ set(gca,'xtick',xtick,'xticklabel',xtick_lab,'tickdir','out');
 
 set(gca,'ytick',setdiff(1:(n_use_chans+n_blank),skipped),'yticklabel',chan_lab,'box','off');
 
-if freq_domain,
+if freq_domain
     h=xlabel('Hz');
 else
-    h=xlabel('Time (ms)');
+    h=xlabel('Time, ms');
 end
-set(h,'fontsize',12,'fontweight','bold');
-
+%set(h,'fontsize',12,'fontweight','bold');
 h=ylabel('Electrode');
-set(h,'fontsize',12,'fontweight','bold');
+%set(h,'fontsize',12,'fontweight','bold');
 
 
-if isfield(GND,'bin_info')
+if isfield(GND,'exp_desc')
+    h=title(GND.exp_desc, 'Interpreter','none');
+elseif isfield(GND,'bin_info')
     h=title(['Bin ' int2str(use_bin) ': ' GND.bin_info(use_bin).bindesc]);
 else
     h=title(['Bin ' int2str(use_bin) ': ' GND.bindesc{use_bin}]);
 end
-set(h,'fontsize',14,'fontweight','bold');
+
+%set(h,'fontsize',14,'fontweight','bold');
 
 hold on;
 v=axis;
 %rightmost vertical line to cover up weird white lip that peeks out from
 %under imagesc
-h=plot([1 1]*v(2),v(3:4));
-set(h,'color',[1 1 1]*.6);
+h=plot([1 1]*v(2),v(3:4)); set(h,'color',[1 1 1]*.6,'LineWidth',0.1);
+%h=plot([1 1],v(3:4)); set(h,'color',[1 1 1]*.6,'LineWidth',1);
 
 %horizontal lines
 show_times=GND.time_pts(show_tpts);
 for a=1:n_wind,
     start_tpt=find_tpt(GND.t_tests(test_id).time_wind(a,1),show_times);
     stop_tpt=find_tpt(GND.t_tests(test_id).time_wind(a,2),show_times);
-    for c=0:(n_use_chans+n_blank-1),
+    for c=0:(n_use_chans+n_blank),
         h=plot([start_tpt-.5 stop_tpt+.5],[1 1]*c+.5);
         if ismember(c+1,skipped) || ismember(c,skipped),
             %make lines near boundaries different??  currently not used
@@ -732,26 +839,37 @@ end
 
 
 %% Add Colorbar (if using RGB)
-if strcmpi(use_color,'rgb')
-    cbar_ax=colorbar; 
-    axes(cbar_ax); hold on;
+if ismember(lower(use_color),{'rgb' 'grey'})
+    cb=colorbar; 
+    if verLessThan('matlab','8.4')
+       axes(cbar_ax);
+    end
+    hold on;
     v=axis;
-    dlt=2*abs_mx/length(colormap);
-    hf=fill([v(1) v(1) v(2) v(2)],[0 dlt dlt 0],zero_color);
-    set(hf,'linestyle','none');
+    %dlt=2*abs_mx/length(colormap);
+    %hf=fill([v(1) v(1) v(2) v(2)],[0 dlt dlt 0],zero_color);
+    %set(hf,'linestyle','none');
     axis(v);
     rngX=v(2)-v(1);
     rngY=v(4)-v(3);
     if strcmpi(p.Results.units,'t')
-        ht=text(v(2)+rngX*.8,rngY*.005,'t');
+        %ht=text(v(2)+rngX*.8,rngY*.005,'t');
+        %ht=text(v(2),v(3),'t');
+        cb.Label.String='Student’s t';
+        cb.Label.FontSize = 10;
+%         if isempty(find(get(cb,'Limits') > 0))
+%             set(cb,'direction','reverse');
+%         end;
         %ht=ylabel('t');
-        set(ht,'fontsize',14,'rotation',0,'fontweight','bold', ...
-            'horizontalalignment','left','verticalalignment','middle');
+%         set(ht,'fontsize',14,'rotation',0,'fontweight','bold', ...
+%             'horizontalalignment','left','verticalalignment','middle');
     else
-        ht=text(v(2)+rngX*.8,rngY*.005,'\muV');
+        cb.Label.String='\muV';
+        cb.Label.FontSize = 10;
+        %ht=text(v(2)+rngX*.8,rngY*.005,'\muV');
         %ht=ylabel('t');
-        set(ht,'fontsize',14,'rotation',0,'fontweight','bold', ...
-            'horizontalalignment','left','verticalalignment','middle');
+        %set(ht,'fontsize',14,'rotation',0,'fontweight','bold', ...
+        %    'horizontalalignment','left','verticalalignment','middle');
     end
 end
 

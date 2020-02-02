@@ -322,12 +322,14 @@
 % 
 % 6/3/2011-Fixed minor bug with viewing GRP variables and made compatible
 % with cluster-based tests
+%
+% 04/09/2017 - Fixed to show GUI in MATLAB R2017a by M.Baranauskas
 
 function gui_erp(cmnd_str,varargin)
 
 p=inputParser;
 p.addRequired('cmnd_str',@(x) ischar(x) || isstruct(x));
-p.addParamValue('fig_id',[],@(x) isempty(x) || (isnumeric(x) && (length(x)==1)));
+p.addParamValue('fig_id',[],@(x) isempty(x) || (length(x)==1));
 p.addParamValue('bin',1,@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('show_wind',[],@(x) isempty(x) || (isnumeric(x) && (length(x)==2)));
 p.addParamValue('GNDorGRP',[],@isstruct);
@@ -437,6 +439,7 @@ if strcmp(cmnd_str,'initialize')
     end
     set(dat.fig_id,'name',['ERP GUI ' p.Results.GNDorGRP.exp_desc],'tag','gui_erp', ...
         'MenuBar','none','position',[139 42 690 700]);
+    %fig_col_orig=get(dat.fig_id,'color');
     
     %% Manage t-test results
     n_t_tests=length(p.Results.GNDorGRP.t_tests);
@@ -660,7 +663,11 @@ if strcmp(cmnd_str,'initialize')
         %t-scores, stdev will bin Inf/-Inf when there's only one subject.
         %For between-subject t-scores, stdev will bin NaN when there are
         %insufficient subjects in one or both groups.
-        dat.showingB=dat.gfp(:,bin)'; 
+        if size(dat.gfp,1) == 1
+            dat.showingB=dat.gfp;
+        else
+            dat.showingB=dat.gfp(:,bin)';
+        end
     elseif strcmpi(p.Results.stat,'t'),
         dat.showingB=dat.showing_t;
     else
@@ -693,15 +700,6 @@ if strcmp(cmnd_str,'initialize')
     %
     %%%%%%%%%%%%%%%%%%%%%% AXIS A: Time x ERP Axes %%%%%%%%%%%%%%%%%%%%%%%%
     %
-    
-    frm_col=[1 1 1]*.702;
-    uipanel(dat.fig_id,...
-        'Units','normalized', ...
-        'Position',[ 0 0.59 .72 0.42 ],...
-        'shadowcolor','k', ...
-        'highlightcolor',frm_col, ...
-        'foregroundcolor',frm_col, ...
-        'backgroundcolor',frm_col);
     
     dat.h_timeA=axes('position',[0.1 .62 .6 .33]);
     dat.start_pt=find_tpt(dat.plt_times(1),dat.times);
@@ -778,17 +776,7 @@ if strcmp(cmnd_str,'initialize')
     %
     %%%%%%%%%%%%%%%%%%%%%% AXIS B: Time x t-score/stderr/GFP Axes %%%%%%%%%%%%%%%%%%%%%%%%
     %
-    
-    frm_col=[1 1 1]*.702; %background color (gray) differs from EEGLAB blue background color
-    uipanel(dat.fig_id,...
-        'Units','normalized', ...
-        'Position',[ 0 0.175 .72 0.42 ],...
-        'shadowcolor','k', ...
-        'highlightcolor',frm_col, ...
-        'foregroundcolor',frm_col, ...
-        'backgroundcolor',frm_col);
-   
-    dat.h_timeB=axes('position',[0.1 .25 .6 .33]); 
+    dat.h_timeB=axes('position',[0.1 .25 .6 .33]);
     dat.absmxB=max(max(abs(dat.showingB(:,dat.start_pt:dat.end_pt))));
     stat_mx=max(max(dat.showingB(:,dat.start_pt:dat.end_pt)));
     stat_mn=min(min(dat.showingB(:,dat.start_pt:dat.end_pt)));
@@ -907,15 +895,6 @@ if strcmp(cmnd_str,'initialize')
     %
     %%%%%%%%%%%%%%%%%%%%%% AXIS C: ERP Topography %%%%%%%%%%%%%%%%%%%%%%%%
     %
-
-    % PANEL
-    uipanel(dat.fig_id,...
-        'Units','normalized', ...
-        'Position',[ 0.719 0.59 0.281 0.42 ],...
-        'shadowcolor','k', ...
-        'highlightcolor',frm_col, ...
-        'foregroundcolor',frm_col, ...
-        'backgroundcolor',frm_col);   
     
     % TOPOGRAPHY
     dat.h_topoA=axes('position',[0.705 .68 .31 .24],'box','off'); 
@@ -930,8 +909,13 @@ if strcmp(cmnd_str,'initialize')
                     %cluster based test
                     mx_tpt_in_ms=plotted_times(mx_tpt);
                     mx_tpt_epoch_id=find(dat.times==mx_tpt_in_ms);
-                    use_test_id=find(dat.psbl_tests==p.Results.t_test);
-                    pval_tpt_id=find(dat.t_tests(use_test_id).used_tpt_ids==mx_tpt_epoch_id);
+                    if isempty(p.Results.t_test)
+                        % warning(['Empty p.Results.t_test' ]);
+                        pval_tpt_id=[];
+                    else
+                        use_test_id=find(dat.psbl_tests==p.Results.t_test);
+                        pval_tpt_id=find(dat.t_tests(use_test_id).used_tpt_ids==mx_tpt_epoch_id);
+                    end;
                     if ~isempty(pval_tpt_id)
                         sig_chans_temp=find(dat.t_tests(use_test_id).adj_pval(:,pval_tpt_id)<dat.t_tests(use_test_id).desired_alphaORq);
                         sig_chans_temp=dat.t_tests(use_test_id).used_chan_ids(sig_chans_temp); %convert sig channel indices into channel indices in the original GND/GRP variable
@@ -972,7 +956,7 @@ if strcmp(cmnd_str,'initialize')
     else
         topoplotMK(dat.showingA(:,plotted_pts(mx_tpt)),dat.chanlocs(dat.showing_chans), ...
             'maplimits',[-1 1]*dat.absmxA,'emarker2',{sig_chans,'o',[1 1 1],4});
-        set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702);
+        %set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702);
         cbar_title='\muV';
     end
 
@@ -981,6 +965,7 @@ if strcmp(cmnd_str,'initialize')
     dat.h_cbarA=axes('position',[0.76 .945 .2 .015]);
     cbar(dat.h_cbarA);
     absmx=round(dat.absmxA*100)/100;
+    set(gca,'xtick',[0 0.5 1]);
     set(gca,'xticklabel',[-absmx 0 absmx]);
     h_cbar_title=title(cbar_title);
     set(h_cbar_title,'fontsize',cbar_title_fontsize);
@@ -988,11 +973,10 @@ if strcmp(cmnd_str,'initialize')
     
     %%% TIME POINT TEXT BOX
     %STATIC TEXT LABEL
-    uicontrol(dat.fig_id,...
+    objs_change_col(1)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
         'Position',[ 0.905 0.62 0.07 0.04 ],...
         'String','msec',...
-        'fontsize',14, ...
         'fontunits','normalized', ...
         'Style','text');
     dat.h_topo_time=uicontrol(dat.fig_id,...
@@ -1014,16 +998,6 @@ if strcmp(cmnd_str,'initialize')
     %%%%%%%%%%%%%%%%%%%%%% AXIS D: t-Score/Standard Error/GFP Topography %%%%%%%%%%%%%%%%%%%%%%%%
     %
     
-    
-    % PANEL
-    uipanel(dat.fig_id,...
-        'Units','normalized', ...
-        'Position',[ 0.719 0.175 0.281 0.42 ],...
-        'shadowcolor','k', ...
-        'highlightcolor',frm_col, ...
-        'foregroundcolor',frm_col, ...
-        'backgroundcolor',frm_col);
-    
     % TOPOGRAPHY
     dat.h_topoB=axes('position',[0.705 .27 .31 .24],'box','off');
     
@@ -1043,7 +1017,7 @@ if strcmp(cmnd_str,'initialize')
         else
             topoplotMK(dat.showingB(:,plotted_pts(mx_tpt)),dat.chanlocs(dat.showing_chans), ...
                 'maplimits',[-1 1]*dat.absmxB,'emarker2',{sig_chans,'o',[1 1 1],4});
-            set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702);
+            %set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702);
             if strcmpi(p.Results.stat,'t'),
                 cbar_title='t-score';
             else
@@ -1056,6 +1030,7 @@ if strcmp(cmnd_str,'initialize')
     dat.h_cbarB=axes('position',[0.76 .535 .2 .015]);
     cbar(dat.h_cbarB);
     absmx=round(dat.absmxB*100)/100;
+    set(gca,'xtick',[0 0.5 1]);
     set(gca,'xticklabel',[-absmx 0 absmx]);
     h_cbar_title=title(cbar_title);
     set(h_cbar_title,'fontsize',cbar_title_fontsize);
@@ -1129,15 +1104,6 @@ if strcmp(cmnd_str,'initialize')
     %%%%%%%%%%%%%%%%%%%%%% AXIS E: PLOTTING OPTIONS %%%%%%%%%%%%%%%%%%%%%%%%
     %
     
-    % PANEL
-    uipanel(dat.fig_id,...
-        'Units','normalized', ...
-        'Position',[ 0 0 1 0.178 ],...
-        'shadowcolor','k', ...
-        'highlightcolor',frm_col, ...
-        'foregroundcolor',frm_col, ...
-        'backgroundcolor',frm_col);
-      
         
     %%%% WHICH BIN TO PLOT
     bdesc_str=cell(1,n_bin);
@@ -1145,11 +1111,10 @@ if strcmp(cmnd_str,'initialize')
         bdesc_str{a}=sprintf('Bin %d: %s',a,dat.bindesc{a});
     end 
     % Text
-    uicontrol(dat.fig_id,...
+    objs_change_col(2)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
         'Position',[ 0.01 0.09 0.24 0.075 ],...
         'String','Current Bin',...
-        'fontsize',12, ...
         'ToolTipString','Bin to plot in Time x ERP/t-score axis.', ...
         'Style','text');
     % Create bin menu
@@ -1157,7 +1122,6 @@ if strcmp(cmnd_str,'initialize')
         'CallBack','gui_erp(''change bin'');',...
         'Units','normalized', ...
         'Position',[ 0.015 0.095 0.23 0.04 ],...
-        'fontsize',12, ...
         'String',bdesc_str, ...
         'Value',bin, ...
         'Style','popup', ...
@@ -1195,11 +1159,10 @@ if strcmp(cmnd_str,'initialize')
     ttest_str{n_psbl_tests+1}='None/Manual';
     
     % Text
-    uicontrol(dat.fig_id,...
+    objs_change_col(3)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
         'Position',[ 0.255 0.09 0.24 0.075 ],...
         'String','Current Test Result',...
-        'fontsize',12, ...
         'ToolTipString','Set of t-test results to visualize.', ...
         'Style','text');
     % Create sortvar browse button
@@ -1207,7 +1170,6 @@ if strcmp(cmnd_str,'initialize')
         'CallBack','gui_erp(''change test'');',...
         'Units','normalized', ...
         'Position',[ 0.26 0.095 0.23 0.04 ],...
-        'fontsize',12, ...
         'String',ttest_str, ...
         'Value',crnt_ttest, ...
         'Style','popup', ...
@@ -1216,11 +1178,10 @@ if strcmp(cmnd_str,'initialize')
 
     %%% Time window in which hypotheses tests were done
     %Text
-    uicontrol(dat.fig_id,...
+    objs_change_col(4)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
-        'Position',[ 0.505 0.09 0.26 0.075 ],... %hier das müsste weter zum Boden reichen, damit es das andere Fenster inschließt
+        'Position',[ 0.505 0.09 0.26 0.075 ],... %hier das mï¿½sste weter zum Boden reichen, damit es das andere Fenster inschlieï¿½t
         'String','Test Window(s) [Min Max]:',...
-        'fontsize',12, ...
         'Style','text');
     %Edit Box
     wind_edges=[];
@@ -1245,11 +1206,10 @@ if strcmp(cmnd_str,'initialize')
     
     %%% Critical t-score here
     %Text
-    uicontrol(dat.fig_id,...
+    objs_change_col(5)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
         'Position',[ 0.76 0.09 0.23 0.075 ],...
         'String','Critical t-score(s)',...
-        'fontsize',12, ...
         'Style','text');
     %Edit Box
     dat.h_critval=uicontrol(dat.fig_id,...
@@ -1266,11 +1226,10 @@ if strcmp(cmnd_str,'initialize')
     %%%% WHICH STAT TO PLOT
     stats={'t-score of ERPs','standard error of ERPs','global field power of ERPs'};
     % Text
-    uicontrol(dat.fig_id,...
+    objs_change_col(6)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
-        'Position',[ 0.005 0.221 0.09 0.03 ],... % Höhe war 0.183
-        'String','Statistic:',...
-        'fontsize',12, ...
+        'Position',[ 0.005 0.221 0.05 0.03 ],... % Hï¿½he war 0.183
+        'String','Stat:',...
         'ToolTipString','Select what to plot in secondary waveform axis: ERP t-scores, standard error of the mean, or global field power.', ...
         'Style','text');
     
@@ -1288,8 +1247,7 @@ if strcmp(cmnd_str,'initialize')
     dat.h_stat=uicontrol(dat.fig_id,...
         'CallBack','gui_erp(''change stat'');',...
         'Units','normalized', ...
-        'Position',[ 0.005 0.19 0.16 0.03 ],...
-        'fontsize',12, ...
+        'Position',[ 0.015 0.19 0.25 0.03 ],...
         'value',ini_val, ...
         'String',stats, ...
         'Style','popup', ...
@@ -1298,11 +1256,10 @@ if strcmp(cmnd_str,'initialize')
     
     %%% TIME RANGE
     %Text
-    uicontrol(dat.fig_id,...
+    objs_change_col(7)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
         'Position',[ 0.01 0.005 0.24 0.075 ],...
         'String','Time Range [Min Max]',...
-        'fontsize',12, ...
         'Style','text');
     %Edit Box
     dat.h_timerange=uicontrol(dat.fig_id,...
@@ -1318,12 +1275,11 @@ if strcmp(cmnd_str,'initialize')
     
     %%% ERP uV RANGE BOX (AXIS A)
     %Text
-    uicontrol(dat.fig_id,...
+    objs_change_col(8)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
         'Position',[ 0.26 0.005 0.26 0.075 ],...
         'String','ERP Range [Min Max]     ',...
         'HorizontalAlignment','center', ...
-        'fontsize',12, ...
         'Style','text');
     %Edit Box
     dat.h_statrangeA=uicontrol(dat.fig_id,...
@@ -1339,12 +1295,11 @@ if strcmp(cmnd_str,'initialize')
     
     %%% t-score/StdErr RANGE BOX (AXIS B)
     %Text
-    uicontrol(dat.fig_id,...
+    objs_change_col(9)=uicontrol(dat.fig_id,...
         'Units','normalized', ...
         'Position',[ 0.50 0.005 0.26 0.075 ],...
         'String',' t/StdErr Range [Min Max]',...
         'HorizontalAlignment','center', ...
-        'fontsize',12, ...
         'Style','text');
     %Edit Box
     dat.h_statrangeB=uicontrol(dat.fig_id,...
@@ -1387,7 +1342,14 @@ if strcmp(cmnd_str,'initialize')
         'ToolTipString','Click for help', ...
         'Style','pushbutton');
     dat.interrupt=1;
+    
+    fig_col_new=get(dat.fig_id,'color');
+    set(objs_change_col,'BackgroundColor',fig_col_new);  % for text uicontrols
+    %objs_change_col_=findobj(dat.fig_id,'BackgroundColor',fig_col_orig); % empty list for remaining uicontrols in MATLAB R2014a
+    %set(objs_change_col_,'BackgroundColor',fig_col_new); % for remaining uicontrols in newer MATLAB
+    
     set(dat.fig_id,'userdata',dat);
+    
 elseif strcmpi(cmnd_str,'time jump'),
     new_tpt=find_tpt(str2num(get(dat.h_topo_time,'string')), ...
         dat.times);
@@ -1845,7 +1807,11 @@ elseif (stat==2),
     cbar_title='\muV';
     ylab='\muV (StdEr)';
 elseif (stat==3),
-    dat.showingB=dat.gfp(:,new_bin)';
+    if size(dat.gfp,1) == 1
+        dat.showingB=dat.gfp;
+    else
+        dat.showingB=dat.gfp(:,new_bin)';
+    end
     cbar_title='\muV';
     ylab='\muV (GFP)';
 end
@@ -1867,7 +1833,11 @@ if isnan(stat_mx) || isnan(stat_mn)
    error('Bin %d does not appear to have any data in it.',new_bin); 
 end
 stat_rng=stat_mx-stat_mn;
-stat_plt_rng=[stat_mn-stat_rng*.02 stat_mx+stat_rng*.02];
+if stat_rng == 0
+    stat_plt_rng=[stat_mn*0.98 stat_mx*1.02]; % GFP from Tones_female.GND
+else
+    stat_plt_rng=[stat_mn-stat_rng*.02 stat_mx+stat_rng*.02];
+end
 stat_plt_rng=round(stat_plt_rng*100)/100;
 axis([plotted_times(1) plotted_times(end) stat_plt_rng]);
 set(dat.h_statrangeB,'string',num2str(stat_plt_rng));
@@ -1893,11 +1863,16 @@ set(dat.h_showingB,'ButtonDownFcn',bdf_code);
 set(dat.h_timeB,'ButtonDownFcn',bdf_code);
 
 %redraw topo color bar for Axis B
-dat.absmxB=max(max(abs(dat.showingB(:,dat.start_pt:dat.end_pt))));
+if size(dat.showingB,2) == 1
+    dat.absmxB=max(abs(dat.showingB(:,1))); % GFP from Tones_female.GND
+else
+    dat.absmxB=max(max(abs(dat.showingB(:,dat.start_pt:dat.end_pt))));
+end
 axes(dat.h_cbarB);
 cla;
 cbar(dat.h_cbarB);
 absmx=round(dat.absmxB*100)/100;
+set(gca,'xtick',[0 0.5 1]);
 set(gca,'xticklabel',[-absmx 0 absmx]);
 h_cbar_title=title(cbar_title);
 set(h_cbar_title,'fontsize',cbar_title_fontsize);
@@ -1973,6 +1948,7 @@ if redrawA,
     cla;
     cbar(dat.h_cbarA);
     absmx=round(dat.absmxA*100)/100;
+    set(gca,'xtick',[0 0.5 1]);
     set(gca,'xticklabel',[-absmx 0 absmx]);
     h_cbar_title=title(cbar_title);
     set(h_cbar_title,'fontsize',cbar_title_fontsize);
@@ -2145,7 +2121,7 @@ if size(dat.showingA,1)<=2,
 else
     topoplotMK(dat.showingA(:,current_tpt),dat.chanlocs(dat.showing_chans),'maplimits', ...
         [-1 1]*dat.absmxA,'emarker2',{sig_chans,'o',[1 1 1],4});
-    set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702); %make topoplot background color match that of GUI
+    %set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702); %make topoplot background color match that of GUI
     
     if get(dat.h_stat,'value')==3,
         %GFP topo
@@ -2154,14 +2130,14 @@ else
             set(dat.fig_id,'CurrentAxes',dat.h_topoB);
             topoplotMK([],dat.chanlocs(dat.showing_chans), ...
                 'style','blank','plain_blank',1);
-            set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702); %make topoplot background color match that of GUI
+            %set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702); %make topoplot background color match that of GUI
         end
     else
         % t-score/stderr
         set(dat.fig_id,'CurrentAxes',dat.h_topoB);
         topoplotMK(dat.showingB(:,current_tpt),dat.chanlocs(dat.showing_chans),'maplimits', ...
             [-1 1]*dat.absmxB,'emarker2',{sig_chans,'o',[1 1 1],4});
-        set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702); %make topoplot background color match that of GUI
+        %set(findobj(gca,'type','patch'),'facecolor',[1 1 1]*.702); %make topoplot background color match that of GUI
     end
 end
 
@@ -2170,12 +2146,14 @@ if (redraw_cbars)
     %axes(dat.h_cbarA);
     set(dat.fig_id,'CurrentAxes',dat.h_cbarA);
     absmx=round(dat.absmxA*100)/100;
+    set(gca,'xtick',[0 0.5 1]);
     set(gca,'xticklabel',[-absmx 0 absmx]);
     
     % t-Score/StdErr/GFP COLOR BAR TICK LABELS
     %axes(dat.h_cbarB);
     set(dat.fig_id,'CurrentAxes',dat.h_cbarB);
     absmx=round(dat.absmxB*100)/100;
+    set(gca,'xtick',[0 0.5 1]);
     set(gca,'xticklabel',[-absmx 0 absmx]);
 end
 drawnow

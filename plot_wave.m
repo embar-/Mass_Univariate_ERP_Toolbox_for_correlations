@@ -115,7 +115,7 @@ p.addParamValue('include_chans',[],@(x) ischar(x) || iscell(x));
 p.addParamValue('time_ticks',[],@isnumeric);
 p.addParamValue('cal_amp',[],@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('cal_width',[],@(x) isnumeric(x) && (length(x)==1));
-p.addParamValue('fig_id',[],@(x) isnumeric(x) && (length(x)==1));
+p.addParamValue('fig_id',[],@(x) (length(x)==1));
 p.addParamValue('verblevel',[],@(x) isnumeric(x) && (length(x)==1));
 p.addParamValue('time_limits',[],@(x) isnumeric(x) && (length(x)==2));
 p.addParamValue('wave_limits',[],@(x) isnumeric(x) && (length(x)==2));
