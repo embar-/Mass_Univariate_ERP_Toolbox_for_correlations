@@ -34,17 +34,28 @@ This toolbox modification is designed to run permutation tests on _t-values of P
 
    `GND.corelate=[9.2 2.8 4.3 8.1 5.9 6.1 7.2 5.5 4.9 3.9 ]';`
    
-4. If `GND.corelate` defined and is not empty, then you can run some permutation test on _t-values of Pearson correlation_ (If `GND.corelate` is empty or does not exist, then permutation test will be run on _Student t-values_!)
+4. After adding `GND.corelate`, it is recommended to update `GND` structure to recalcute `GND.grands_t` by converting it from _Student t-values_ into _Pearson correlation t values_, and to add `GND.grands_r` with _Pearson correlation r values_ :
+
+   `GND=grandsGND(GND); % update GND structure, including GND.grands_t and GND.grands_r field`
+   
+    After this update, you will see different lower graphics in `gui_erp(GND)`. However this was not mandatory for permutations.
+   
+5. If `GND.corelate` defined and is not empty, then you can run some permutation test on _t-values of Pearson correlation_ (If `GND.corelate` is empty or does not exist, then permutation test will be run on _Student t-values_!)
 
    `GNDc=clustGND(GND,1); % cluster-based permutation test `
    
    `GNDt=tmaxGND(GND,1);  % t-max permutation test`
 
-5. You can extract grand Pearson correlation r values (without permutation) from `GND.grands_r` after executing:
+6. Any time later you can visualize GND and permutations results by executing:
 
-   `GND=grandsGND(GND); % update GND structure, including GND.grands_r field`
+   `GND=grandsGND(GND); % update GND structure, including GND.grands_t and GND.grands_r field`
+   
+   `gui_erp(GND); % grand averages, topographics...`
+   
+   `sig_raster(GND,1,'use_color','rgb');`
 
-6. If later you want to run original permutation test on _Student t-values_, please rename/remove `GND.corelate` field.
+7. If later you want to run original permutation test on _Student t-values_, please rename/remove `GND.corelate` field. After moving this field away, remember to update `GND` structure by `GND=grandsGND(GND);`.
+
 
 #### Credits
 Patches to run permutation tests on t-values of Pearson correlation made by M. Baranauskas for scientific research. This modified toolbox version was used in these published works: 
