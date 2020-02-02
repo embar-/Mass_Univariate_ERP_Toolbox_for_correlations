@@ -1,4 +1,4 @@
-%function [pval, t_orig, clust_info, seed_state, est_alpha]=clust_perm1(data,chan_hood,n_perm,fwer,tail,thresh_p,verblevel,seed_state,freq_domain)
+%function [pval, t_orig, clust_info, seed_state, est_alpha]=clust_perm1(data,chan_hood,n_perm,fwer,tail,thresh_p,verblevel,seed_state,freq_domain,corelate)
 %
 % clust_perm1-One sample cluster-based permutation test using the "cluster
 %             mass" statistic and a null hypothesis of a mean of zero.  This
@@ -49,7 +49,11 @@
 %                    (e.g. time points).  Otherwise, the report will be given
 %                    in frequency domain units (e.g., frequencies). {default:
 %                    0}
-%
+%  corelate        - [] if you don't want Pearson correlation.
+%                    If you want cluster-based permutation test on t-values 
+%                    of Pearson correlation, then provide
+%                    values for correlation in Nx1 matrix, where N is
+%                    number of participants.
 %
 % Outputs:
 %  pval       - p-value at each time point and electrode (corrected for
@@ -134,6 +138,9 @@
 % 3/17/2013-Randomization is now compatible with Matlab v13. Thanks to
 % Aaron Newman for the fix.
 %
+% 4/22/2017 M.Baranauskas added support to compute 
+% t-values of Pearson correlation instead of Student t, 
+% if values in "corelate" variable were provided.
 
 %This code has an appropriate false positive rate when run on Gaussian
 %noise (26 channels, 25 time points, 16 subs, two-tailed test). Done with
@@ -141,7 +148,7 @@
 %
 
 
-function [pval, t_orig, clust_info, seed_state, est_alpha]=clust_perm1(data,chan_hood,n_perm,fwer,tail,thresh_p,verblevel,seed_state,freq_domain)
+function [pval, t_orig, clust_info, seed_state, est_alpha]=clust_perm1(data,chan_hood,n_perm,fwer,tail,thresh_p,verblevel,seed_state,freq_domain,corelate)
 
 if nargin<1,
     error('You need to provide data.');
@@ -185,7 +192,7 @@ end
 
 %Get random # generator state
 if verLessThan('matlab','8.1')
-    defaultStream=RandStream.getDefaultStream; 
+    defaultStream=RandStream.getDefaultStream;
 else
     defaultStream=RandStream.getGlobalStream;
 end
@@ -200,13 +207,18 @@ if (nargin<9),
     freq_domain=0;
 end
 
+if (nargin<10),
+    corelate=[];
+end
 
 s=size(data);
 n_chan=s(1);
 n_pts=s(2);
 n_subs=s(3);
-if n_subs<2,
+if n_subs<2 && isempty(corelate)
     error('You need data from at least two observations (e.g., participants) to perform a hypothesis test.')
+elseif n_subs < 3 && ~isempty(corelate)
+    error('You need data from at least three observations (e.g., participants) to perform a hypothesis test.')
 end
 
 if n_subs<7,
@@ -270,11 +282,19 @@ for perm=1:n_perm
     
     %computes t-score of permuted data across all channels and time
     %points or frequencies
-    sm=sum(d_perm,3);
-    mn=sm/n_subs;
-    sm_sqrs=sum(d_perm.^2,3)-(sm.^2)/n_subs;
-    stder=sqrt(sm_sqrs)/sqrt_nXnM1;
-    t=mn./stder;
+    if isempty(corelate),
+        sm=sum(d_perm,3);
+        mn=sm/n_subs;
+        sm_sqrs=sum(d_perm.^2,3)-(sm.^2)/n_subs;
+        stder=sqrt(sm_sqrs)/sqrt_nXnM1;
+        t=mn./stder;
+    else
+        r=NaN([n_chan n_pts]);
+        for chan_i=1:n_chan, % FIXME: avoid FOR loop and compute all values at once
+            r(chan_i,:)=corr(corelate,squeeze(d_perm(chan_i,:,:))');
+        end;
+        t= sqrt(n_subs-2) * r ./ sqrt(1 - r .^2);
+    end;
     
     [clust_ids, n_clust]=find_clusters(t,thresh_t,chan_hood,-1);
 
@@ -306,11 +326,19 @@ end
 
 %computes t-scores of observations at all channels and time
 %points/frequencies
-sm=sum(data,3);
-mn=sm/n_subs;
-sm_sqrs=sum(data.^2,3)-(sm.^2)/n_subs;
-stder=sqrt(sm_sqrs)/sqrt_nXnM1;
-t_orig=mn./stder;
+if isempty(corelate),
+    sm=sum(data,3);
+    mn=sm/n_subs;
+    sm_sqrs=sum(data.^2,3)-(sm.^2)/n_subs;
+    stder=sqrt(sm_sqrs)/sqrt_nXnM1;
+    t_orig=mn./stder;
+else
+    r=NaN([n_chan n_pts]);
+    for chan_i=1:n_chan, % FIXME: avoid FOR loop and compute all values at once
+        r(chan_i,:)=corr(corelate,squeeze(data(chan_i,:,:))');
+    end;
+    t_orig= sqrt(n_subs-2) * r ./ sqrt(1 - r .^2);
+end;
 
 
 %compute p-values

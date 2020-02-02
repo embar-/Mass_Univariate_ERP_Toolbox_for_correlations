@@ -219,6 +219,12 @@
 %%%%%%%%%%%%%%%% REVISION LOG %%%%%%%%%%%%%%%%%
 % 12/11/2011-Now uses Amy Guthormsen's recursiveless find_clusters.m.
 %
+% 4/22/2017 M.Baranauskas added support to compute 
+% t-values of Pearson correlation instead of Student t, 
+% if values in "GND.corelate" variable were provided.
+% "GND.corelate" contains values for correlation in Nx1 matrix, 
+% where N is number of participants.
+%
 
 function [GND, prm_pval, data_t]=clustGND(GND_or_fname,bin,varargin)
 
@@ -409,27 +415,27 @@ if mean_wind,
 else
     %Use every single time point in time window(s)
     n_use_tpts=length(use_tpts);
-    erps=zeros(length(use_chans),n_use_tpts,n_sub);    
+    erps=zeros(length(use_chans),n_use_tpts,n_sub);
     for sub=1:n_sub,
         erps(:,:,sub)=GND.indiv_erps(use_chans,use_tpts,bin,use_subs(sub));
     end
 end
 
-
-%% Report tail of test & alpha levels
-VerbReport(sprintf('Testing null hypothesis that the grand average ERPs in Bin %d (%s) have a mean of %f microvolts.',bin, ...
-    GND.bin_info(bin).bindesc,p.Results.null_mean),1,VERBLEVEL);
-if p.Results.tail==0
-    VerbReport(sprintf('Alternative hypothesis is that the ERPs differ from %f (i.e., two-tailed test).',p.Results.null_mean), ...
-        1,VERBLEVEL);
-elseif p.Results.tail<0,
-    VerbReport(sprintf('Alternative hypothesis is that the ERPs are less than %f (i.e., lower-tailed test).',p.Results.null_mean), ...
-        1,VERBLEVEL);
-else
-    VerbReport(sprintf('Alternative hypothesis is that the ERPs are greater than %f (i.e., upper-tailed test).',p.Results.null_mean), ...
-        1,VERBLEVEL);
+if ~isfield(GND,'corelate') || isempty(GND.corelate)
+    %% Report tail of test & alpha levels
+    VerbReport(sprintf('Testing null hypothesis that the grand average ERPs in Bin %d (%s) have a mean of %f microvolts.',bin, ...
+        GND.bin_info(bin).bindesc,p.Results.null_mean),1,VERBLEVEL);
+    if p.Results.tail==0
+        VerbReport(sprintf('Alternative hypothesis is that the ERPs differ from %f (i.e., two-tailed test).',p.Results.null_mean), ...
+            1,VERBLEVEL);
+    elseif p.Results.tail<0,
+        VerbReport(sprintf('Alternative hypothesis is that the ERPs are less than %f (i.e., lower-tailed test).',p.Results.null_mean), ...
+            1,VERBLEVEL);
+    else
+        VerbReport(sprintf('Alternative hypothesis is that the ERPs are greater than %f (i.e., upper-tailed test).',p.Results.null_mean), ...
+            1,VERBLEVEL);
+    end
 end
-
 
 %% Optionally reset random number stream to reproduce a previous test
 if isempty(p.Results.reproduce_test),
@@ -448,9 +454,14 @@ else
 end
 
 %% Compute the permutation test
+if ~isfield(GND,'corelate')
+    values_for_correlation=[];
+else
+    values_for_correlation=GND.corelate;
+end
 [prm_pval, data_t, clust_info, seed_state, est_alpha]=clust_perm1(erps-p.Results.null_mean, ...
     chan_hood,p.Results.n_perm,p.Results.alpha,p.Results.tail,p.Results.thresh_p, ...
-    VERBLEVEL,seed_state,0);
+    VERBLEVEL,seed_state,0,values_for_correlation);
 
 %% Command line summary of results
 if p.Results.tail>=0,
@@ -651,6 +662,14 @@ if ~isempty(p.Results.output_file)
         for s=1:length(use_subs),
             fprintf(fid,'%s\n',GND.indiv_subnames{use_subs(s)});
         end
+
+        % Summary of p-values
+        if isempty(sig_ids),
+            fprintf(fid,'All corrected p-values>=%f\n',min(min(prm_pval)));
+        else
+            fprintf(fid,'All significant corrected p-values are between %f and %f\n',max_sig_p,min_sig_p);
+        end;
+
     end
     fclose(fid);
 end
