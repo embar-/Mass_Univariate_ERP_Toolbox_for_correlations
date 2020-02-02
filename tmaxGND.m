@@ -222,7 +222,11 @@
 %
 % 4/13/2011-Now reports min AND max significant p-values to command line 
 %
-
+% 4/22/2017 M.Baranauskas added support to compute 
+% t-values of Pearson correlation instead of Student t, 
+% if values in "GND.corelate" variable were provided.
+% "GND.corelate" contains values for correlation in Nx1 matrix, 
+% where N is number of participants.
 
 
 function [GND, prm_pval, data_t, crit_t]=tmaxGND(GND_or_fname,bin,varargin)
@@ -431,21 +435,21 @@ else
     end
 end
 
-
-%% Report tail of test & alpha levels
-VerbReport(sprintf('Testing null hypothesis that the grand average ERPs in Bin %d (%s) have a mean of %f microvolts.',bin, ...
-    GND.bin_info(bin).bindesc,p.Results.null_mean),1,VERBLEVEL);
-if p.Results.tail==0
-    VerbReport(sprintf('Alternative hypothesis is that the ERPs differ from %f (i.e., two-tailed test).',p.Results.null_mean), ...
-        1,VERBLEVEL);
-elseif p.Results.tail<0,
-    VerbReport(sprintf('Alternative hypothesis is that the ERPs are less than %f (i.e., lower-tailed test).',p.Results.null_mean), ...
-        1,VERBLEVEL);
-else
-    VerbReport(sprintf('Alternative hypothesis is that the ERPs are greater than %f (i.e., upper-tailed test).',p.Results.null_mean), ...
-        1,VERBLEVEL);
+if ~isfield(GND,'corelate') || isempty(GND.corelate)
+    %% Report tail of test & alpha levels
+    VerbReport(sprintf('Testing null hypothesis that the grand average ERPs in Bin %d (%s) have a mean of %f microvolts.',bin, ...
+        GND.bin_info(bin).bindesc,p.Results.null_mean),1,VERBLEVEL);
+    if p.Results.tail==0
+        VerbReport(sprintf('Alternative hypothesis is that the ERPs differ from %f (i.e., two-tailed test).',p.Results.null_mean), ...
+            1,VERBLEVEL);
+    elseif p.Results.tail<0,
+        VerbReport(sprintf('Alternative hypothesis is that the ERPs are less than %f (i.e., lower-tailed test).',p.Results.null_mean), ...
+            1,VERBLEVEL);
+    else
+        VerbReport(sprintf('Alternative hypothesis is that the ERPs are greater than %f (i.e., upper-tailed test).',p.Results.null_mean), ...
+            1,VERBLEVEL);
+    end
 end
-
 
 %% Optionally reset random number stream to reproduce a previous test
 if isempty(p.Results.reproduce_test),
@@ -464,7 +468,14 @@ else
 end
 
 %Compute the permutation test
-[prm_pval, data_t, crit_t, seed_state, est_alpha]=mxt_perm1(erps-p.Results.null_mean,p.Results.n_perm,p.Results.alpha,p.Results.tail,VERBLEVEL,seed_state);
+if ~isfield(GND,'corelate')
+    values_for_correlation=[];
+else
+    values_for_correlation=GND.corelate;
+end
+[prm_pval, data_t, crit_t, seed_state, est_alpha]=mxt_perm1(...
+   erps-p.Results.null_mean,p.Results.n_perm,p.Results.alpha,p.Results.tail,...
+   VERBLEVEL,seed_state,0,values_for_correlation);
 
 %Command line summary of results
 VerbReport(['Critical t-score(s):' num2str(crit_t)],1,VERBLEVEL);
