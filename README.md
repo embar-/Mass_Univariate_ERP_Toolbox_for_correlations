@@ -40,7 +40,11 @@ This toolbox modification is designed to run permutation tests on _t-values of P
    
    `GNDt=tmaxGND(GND,1);  % t-max permutation test`
 
-5. If later you want to run original permutation test on _Student t-values_, please rename/remove `GND.corelate` field.
+5. You can extract grand Pearson correlation r values (without permutation) from `GND.grands_r` after executing:
+
+   `GND=grandsGND(GND); % update GND structure, including GND.grands_r field`
+
+6. If later you want to run original permutation test on _Student t-values_, please rename/remove `GND.corelate` field.
 
 #### Credits
 Patches to run permutation tests on t-values of Pearson correlation made by M. Baranauskas for scientific research. This modified toolbox version was used in these published works: 
