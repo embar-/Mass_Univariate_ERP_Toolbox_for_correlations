@@ -104,6 +104,8 @@
 %
 % 4/4/2011: Made compatible with Windows.
 %
+% 2/2/2020 Only Channel labels are critical, other channel information may differ a bit.
+% Fixed by M.Baranauskas
 
 %%%%%%%%%%%%%%%% FUTURE WORK %%%%%%%%%%%%%%%%%
 % -Add Verblevel optional input?
@@ -412,8 +414,12 @@ for grp=1:n_groups,
         end
         
         %Make sure new GND variable in consistent with the old
-        if ~isequal(GND.chanlocs(use_chans),GRP.chanlocs),
-            error('The channel location information in the GND variable from file %s differs from that in previous files.', ...
+        if ~isequal({GND.chanlocs(use_chans).labels},{GRP.chanlocs.labels}) % Labels are critical
+            error('The channel labels in the GND variable from file %s differs from that in previous files.', ...
+                infiles{grp});
+        end
+        if ~isequal(GND.chanlocs(use_chans),GRP.chanlocs), % Other channels information is not critical
+            warning('The channel location information in the GND variable from file %s differs from that in previous files.', ...
                 infiles{grp});
         end
         
@@ -429,7 +435,7 @@ for grp=1:n_groups,
                 infiles{grp});
         end
         
-        if ~isequal(GND.bsln_wind,GRP.bsln_wind),
+        if ~isequal(GND.bsln_wind,GRP.bsln_wind) && ~isnan(GND.bsln_wind) && ~isnan(GRP.bsln_wind),
             error('The baseline time window in the GND variable from file %s differs from that in previous files.', ...
                 infiles{grp});
         end
@@ -543,5 +549,5 @@ if isempty(p.Results.out_fname),
     end 
 elseif ~strcmpi(p.Results.out_fname,'no save'),
     [jpath, jname]=pathNname(p.Results.out_fname);
-    GRP=save_matmk(GRP,jname,jpath);
+    GRP=save_matmk(GRP,jname,jpath,1);
 end

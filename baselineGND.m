@@ -1,6 +1,7 @@
 % baselineGND() - Baseline the ERPs in a Mass Univariate ERP Toolbox GND 
 %                 struct variable by removing the mean amplitude within a 
 %                 specified time window.
+%                 Also, it computes the grand average ERPs, STD, T values.
 %
 % Usage:
 %  >> GND=baselineGND(GND,bsln_wind,verblevel);
@@ -129,7 +130,7 @@ for s=1:n_sub,
        fprintf('Baselining data from Participant #%d (%s).\n',s,GND.indiv_subnames{s});
     end
     for b=1:n_bin,
-        GND.indiv_erps(:,:,:,s)=reshape(rmbase(GND.indiv_erps(:,:,:,s), ...
+        GND.indiv_erps(:,:,b,s)=reshape(rmbase(GND.indiv_erps(:,:,b,s), ...
             n_tpt,bsln_tpts),n_chan,n_tpt,n_bin);
     end
     if ~isempty(GND.cals),
@@ -139,22 +140,7 @@ for s=1:n_sub,
     end
 end
 
-%Recompute grands, stders, & grand t-scores
-for b=1:n_bin,
-    bin_subs=find(GND.indiv_bin_ct(:,b));
-    GND.sub_ct(b)=length(bin_subs);
-    if GND.sub_ct(b),
-        GND.grands(:,:,b)=mean(GND.indiv_erps(:,:,b,bin_subs),4);
-        GND.grands_stder(:,:,b)=std(GND.indiv_erps(:,:,b,bin_subs),0,4)/sqrt(GND.sub_ct(b));
-        GND.grands_t(:,:,b)=GND.grands(:,:,b)./GND.grands_stder(:,:,b);
-    else
-        watchit(sprintf('No average files contribute to bin %d.',b));
-    end
-end
-%Recompute grand cal pulses
-if ~isempty(GND.cals),
-    GND.cals.grand_cals=mean(GND.cals.indiv_cals,3);
-end
+GND=grandsGND(GND);
 
 GND.bsln_wind=[GND.time_pts(bsln_tpt(1)) GND.time_pts(bsln_tpt(2))];
 
