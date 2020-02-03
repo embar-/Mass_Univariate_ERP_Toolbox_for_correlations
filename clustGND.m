@@ -674,6 +674,8 @@ if ~isempty(p.Results.output_file)
     fclose(fid);
 end
 
+GND=grandsGND(GND); % update GND.grands* fields
+
 if ~strcmpi(p.Results.save_GND,'no'),
     GND=save_matmk(GND);
 end
