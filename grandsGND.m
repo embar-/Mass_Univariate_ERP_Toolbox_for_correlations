@@ -29,7 +29,11 @@ function GND=grandsGND(GND)
 GND.grands=[];
 GND.grands_t=[];
 GND.grands_stder=[];
-GND.grands_r=[];
+if isfield(GND,'corelate') || isempty(GND.corelate)
+    GND.grands_r=[];
+elseif isfield(GND,'grands_r')
+    GND=rmfield(a,'grands_r')
+end
 [n_chan, ~, n_bin, ~]=size(GND.indiv_erps);
 for b=1:n_bin,
     bin_subs=find(GND.indiv_bin_ct(:,b));
